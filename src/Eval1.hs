@@ -64,7 +64,7 @@ stepComm (Seq Skip cmd2) =
      return cmd2 
 stepComm (Seq cmd1 cmd2) =
   do cmd1' <- stepComm cmd1
-     return Seq cmd1' cmd2
+     return $ Seq cmd1' cmd2
 stepComm (IfThenElse bexp cmd1 cmd2) =
   do b <- evalExp bexp     
      if b 
@@ -77,23 +77,42 @@ stepComm (While bexp cmd) =
      else return Skip
 
 binOp :: MonadState m => Exp a -> Exp a -> (a -> a -> b) -> m b
-binOP exp1 exp2 op =
+binOp exp1 exp2 op =
   do e1 <- evalExp exp1 
      e2 <- evalExp exp2
      return (op e1 e2)
 
-uOp :: MonadState m => Exp a -> (a -> a)
+uOp :: MonadState m => Exp a -> (a -> a) -> m a
+uOp exp op = 
+  do e1 <- evalExp exp
+     return (op e1)
+
 -- Evalua una expresion
 evalExp :: MonadState m => Exp a -> m a
 -- Expresiones enteras
-evalExp (Const nv) = return nv  
-evalExp (Var v) =
-  do nv <- lookfor v 
-     return nv
-evalExp (UMinus iexp) = 
+evalExp (Const nv)          = return nv  
+evalExp (Var v)             = do {nv <- lookfor v; return nv}
+evalExp (UMinus iexp)       = uOp iexp (\n -> -n) 
+evalExp (Plus iexp1 iexp2)  = binOp iexp1 iexp2 (+)
+evalExp (Minus iexp1 iexp2) = binOp iexp1 iexp2 (-)
+evalExp (Times iexp1 iexp2) = binOp iexp1 iexp2 (*)
+evalExp (Div iexp1 iexp2)   = binOp iexp1 iexp2 div  
+--Expresiones Booleanas
+evalExp BTrue               = return True
+evalExp BFalse              = return False
+evalExp (Not bexp)          = uOp bexp not
+evalExp (Lt iexp1 iexp2)    = binOp iexp1 iexp2 (<)
+evalExp (Gt iexp1 iexp2)    = binOp iexp1 iexp2 (>)
+evalExp (And bexp1 bexp2)   = binOp bexp1 bexp2 (&&)
+evalExp (Or bexp1 bexp2)    = binOp bexp1 bexp2 (||)
+evalExp (Eq iexp1 iexp2)    = binOp iexp1 iexp2 (==)
+evalExp (NEq iexp1 iexp2)   = binOp iexp1 iexp2 (/=)
+--
+evalExp (EAssgn var iexp)   = 
   do nv <- evalExp iexp
-     return (-nv)
-evalExp (Plus iexp1 iexp2) =
-  do n <- evalExp iexp1
-     m <- evalExp iexp2
-     return (n + m) 
+     update var nv
+     return nv  
+--
+evalExp (ESeq iexp1 iexp2)  =
+  do evalExp iexp1
+     evalExp iexp2 
